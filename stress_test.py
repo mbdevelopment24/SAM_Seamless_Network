@@ -9,6 +9,7 @@ import os
 import random
 import yaml
 import sys
+import signal
 
 
 class StressTest:
@@ -116,29 +117,38 @@ class StressTest:
         """
         Randomly choosing the domain and sending requests
         """
-        logger.info("Starting stress test.")
-        for counter in range(self.total_requests_made):
-            random_domain = random.choice(self.domains)  # Select a random domain for each request
-            self.request_queue.put(random_domain)
+        try:
+            for counter in range(self.total_requests_made):
+                random_domain = random.choice(self.domains)  # Select a random domain for each request
+                self.request_queue.put(random_domain)
 
-        start_time = time.time()
+            start_time = time.time()
 
-        threads = []
+            threads = []
 
-        for i in range(self.num_threads):
-            logger.info(f"Starting thread {i + 1}.")
-            thread = Thread(target=self.worker, args=(i + 1,))  # Pass iteration number
-            thread.start()
-            threads.append(thread)
+            for i in range(self.num_threads):
+                logger.info(f"Starting thread {i + 1}.")
+                thread = Thread(target=self.worker, args=(i + 1,))  # Pass iteration number
+                thread.start()
+                threads.append(thread)
 
-        for thread in threads:
-            thread.join(self.timeout)
-            if thread.is_alive():
-                logger.warning("Timeout reached. Stopping the test.")
-                break
+            for thread in threads:
+                thread.join(self.timeout)
+                if thread.is_alive():
+                    logger.warning("Timeout reached. Stopping the test.")
+                    break
 
-        end_time = time.time()
-        self.calculate_statistics(end_time - start_time)
+            end_time = time.time()
+            self.calculate_statistics(end_time - start_time)
+
+        except KeyboardInterrupt:
+            logger.debug("Keyboard interrupt detected. Stopping stress test.")
+            self.is_running = False  # Stop the workers
+            # Wait for the threads to finish their current work
+            for thread in threads:
+                thread.join()
+            logger.info("Test stopped by user.")
+            sys.exit(0)
 
     def calculate_statistics(self, total_time):
         """
